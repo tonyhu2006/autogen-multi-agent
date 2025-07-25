@@ -28,7 +28,15 @@ from agents.base_agent_v4 import EnhancedAssistantAgent
 from agents.research_agent_v4 import EnhancedResearchAgent, create_research_agent
 from agents.email_agent_v4 import EnhancedEmailAgent, create_email_agent
 from teams.team_coordinator_v4 import TeamCoordinator, TaskType, TaskPriority
-from cognitive_context.cognitive_analysis import CognitiveTools, CognitiveLevel
+from cognitive_context.cognitive_analysis import CognitiveAnalysis, CognitiveLevel
+
+# 自定义JSON编码器，处理枚举类型
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (TaskType, TaskPriority, CognitiveLevel)):
+            return obj.value if hasattr(obj, 'value') else str(obj)
+        return super().default(obj)
+
 from cognitive_context.protocol_shells import ProtocolShellManager, ProtocolType
 
 # 环境配置
@@ -289,7 +297,7 @@ class AutoGenMultiAgentSystem:
         
         return TaskType.GENERAL
 
-    def _determine_priority(self, user_input: str, analysis: Dict[str, Any]) -> TaskPriority:
+    def _determine_priority(self, user_input: str, analysis) -> TaskPriority:
         """确定任务优先级"""
         user_input_lower = user_input.lower()
         
@@ -470,7 +478,7 @@ class AutoGenMultiAgentSystem:
                 filename = f"session_history_{timestamp}.json"
                 
                 with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(self.session_history, f, ensure_ascii=False, indent=2)
+                    json.dump(self.session_history, f, ensure_ascii=False, indent=2, cls=CustomJSONEncoder)
                 
                 logger.info(f"会话历史已保存到: {filename}")
                 
