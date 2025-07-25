@@ -1,0 +1,96 @@
+{
+  "version": "0.21.0",
+  "metadata": {
+    "created": "2025-01-25T07:35:00Z",
+    "project": "AutoGen多代理AI系统",
+    "description": "基于Microsoft AutoGen框架的智能多代理系统"
+  },
+  "tags": {
+    "master": {
+      "name": "master",
+      "description": "主开发分支",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "项目基础设施搭建",
+          "description": "建立项目基础设施，包括环境配置、依赖管理、日志系统和错误处理",
+          "status": "done",
+          "priority": "high",
+          "details": "完成环境配置文件(.env.local)、requirements.txt、日志配置等基础设施",
+          "dependencies": [],
+          "subtasks": []
+        },
+        {
+          "id": 2,
+          "title": "认知增强层开发",
+          "description": "开发认知分析模块和协议Shell系统",
+          "status": "in-progress",
+          "priority": "high",
+          "details": "实现cognitive_analysis.py和protocol_shells.py，包括字段共振和自修复机制",
+          "dependencies": [1],
+          "subtasks": []
+        },
+        {
+          "id": 3,
+          "title": "AutoGen框架集成",
+          "description": "集成和增强AutoGen框架功能",
+          "status": "in-progress",
+          "priority": "high",
+          "details": "开发增强基础代理(base_agent.py)、群聊管理器增强和工具函数注册系统",
+          "dependencies": [1, 2],
+          "subtasks": []
+        },
+        {
+          "id": 4,
+          "title": "研究代理开发",
+          "description": "开发基于Brave Search API的研究代理",
+          "status": "in-progress",
+          "priority": "high",
+          "details": "实现research_agent.py，集成Brave Search API进行网络搜索和深度分析",
+          "dependencies": [2, 3],
+          "subtasks": []
+        },
+        {
+          "id": 5,
+          "title": "邮件代理开发",
+          "description": "开发基于Gmail API的邮件代理",
+          "status": "in-progress",
+          "priority": "high",
+          "details": "实现email_agent.py，集成Gmail API实现智能邮件生成和发送",
+          "dependencies": [2, 3],
+          "subtasks": []
+        },
+        {
+          "id": 6,
+          "title": "代理间通信协议",
+          "description": "建立代理间的通信和协作机制",
+          "status": "pending",
+          "priority": "medium",
+          "details": "设计和实现研究代理与邮件代理之间的无缝协作协议",
+          "dependencies": [4, 5],
+          "subtasks": []
+        },
+        {
+          "id": 7,
+          "title": "系统集成和主程序",
+          "description": "完成系统集成和主程序开发",
+          "status": "in-progress",
+          "priority": "high",
+          "details": "完善main.py，实现完整的工作流程和交互式界面",
+          "dependencies": [4, 5, 6],
+          "subtasks": []
+        },
+        {
+          "id": 8,
+          "title": "测试和优化",
+          "description": "系统测试、性能优化和文档完善",
+          "status": "pending",
+          "priority": "medium",
+          "details": "进行全面测试，性能优化，完善文档和使用指南",
+          "dependencies": [7],
+          "subtasks": []
+        }
+      ]
+    }
+  }
+}
