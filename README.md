@@ -78,34 +78,89 @@ AutoGen v0.4+ Multi-Agent AI System 是一个基于 Microsoft AutoGen 框架的�
 
 ```mermaid
 graph TB
-    A[用户接口] --> B[AutoGen v0.4+ 核心]
-    B --> C[研究代理]
-    B --> D[邮件代理]
-    B --> E[团队协调器]
+    subgraph "📱 用户交互层"
+        A[用户接口]
+        I[定时调度器]
+        K[配置管理]
+    end
     
-    C --> F[Gemini Balance API]
-    D --> G[SMTP 服务]
-    E --> H[任务队列]
+    subgraph "🧠 智能协调中枢"
+        TC[Team Coordinator 🧠]
+        subgraph "AI 智能大脑"
+            AI[Gemini Balance API]
+            RT[智能路由决策引擎]
+        end
+        TQ[任务队列管理]
+    end
     
-    I[定时调度器] --> B
-    J[认知增强层] --> B
-    K[配置管理] --> B
+    subgraph "🔧 专业代理层"
+        C[研究代理 🔍]
+        D[邮件代理 📧]
+        GA[通用助手 🤖]
+    end
     
+    subgraph "🔌 外部服务层"
+        F[Gemini Balance API]
+        G[SMTP 服务]
+        S[搜索引擎]
+    end
+    
+    %% 信息流向
+    A --> TC
+    I --> TC
+    K --> TC
+    
+    TC --> AI
+    AI --> RT
+    RT --> TQ
+    
+    TQ --> C
+    TQ --> D
+    TQ --> GA
+    
+    C --> F
+    C --> S
+    D --> G
+    GA --> F
+    GA --> S
+    
+    %% 认知增强
+    J[认知增强层] --> TC
+    
+    %% 样式设置
+    style TC fill:#ff9800,stroke:#e65100,stroke-width:3px,color:#fff
+    style AI fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style RT fill:#2196f3,stroke:#1565c0,stroke-width:2px,color:#fff
     style A fill:#e1f5fe
-    style B fill:#f3e5f5
+    style C fill:#f3e5f5
+    style D fill:#fff3e0
+    style GA fill:#e8f5e8
     style F fill:#e8f5e8
     style G fill:#fff3e0
+    style S fill:#fce4ec
 ```
 
 ### 核心组件
 
 | 组件 | 文件 | 功能描述 |
 |------|------|----------|
-| 主系统 | `main_v4.py` | 核心多代理系统和交互界面 |
+| **🧠 智能协调器** | `team_coordinator_v4.py` | **AI智能大脑，负责任务路由决策和代理调度** |
+| 主系统 | `main_v4.py` | 用户交互和会话管理 |
 | 启动器 | `run_v4.py` | 多模式启动脚本 |
+| 研究代理 | `research_agent_v4.py` | 智能搜索、深度分析和研究报告生成 |
+| 邮件代理 | `email_agent_v4.py` | 智能邮件生成和SMTP发送 |
+| 通用助手 | `base_agent_v4.py` | 日常对话和简单实时信息查询 |
 | 邮件服务 | `scheduled_email_service.py` | 定时邮件生成和发送 |
 | 研究服务 | `scheduled_research.py` | 定时研究任务执行 |
 | SMTP 工具 | `test_direct_smtp.py` | 邮件发送测试和诊断 |
+
+### 🚀 架构亮点
+
+- **🧠 智能协调中枢**: Team Coordinator 配备 AI 大脑，使用 Gemini Balance API 进行智能路由决策
+- **🎯 智能任务分配**: 基于用户请求的复杂度、专业性和紧急程度进行智能分配
+- **🔄 统一调度管理**: 所有代理由智能协调器统一调度，避免冲突和重复
+- **⚡ 自适应路由**: AI 大脑能够学习和适应不同类型的任务需求
+- **🛡️ 备用机制**: 当 AI 路由失败时，自动切换到关键词匹配备用路由
 
 ---
 
