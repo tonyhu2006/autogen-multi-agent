@@ -204,24 +204,20 @@ class AutoGenMultiAgentSystem:
             raise
 
     async def process_user_request(self, user_input: str) -> Dict[str, Any]:
-        """处理用户请求"""
+        """处理用户请求（使用智能协调器路由）"""
         try:
             if not self.is_initialized:
                 await self.initialize()
             
             logger.info(f"处理用户请求: {user_input[:100]}...")
             
-            # 分析用户请求
-            request_analysis = await self._analyze_user_request(user_input)
-            
-            # 根据分析结果路由任务
-            result = await self._route_and_execute_task(user_input, request_analysis)
+            # 直接使用智能协调器进行任务路由和执行
+            result = await self._execute_with_intelligent_coordinator(user_input)
             
             # 记录会话历史
             session_record = {
                 "timestamp": datetime.now().isoformat(),
                 "user_input": user_input,
-                "analysis": request_analysis,
                 "result": result
             }
             self.session_history.append(session_record)
@@ -234,6 +230,38 @@ class AutoGenMultiAgentSystem:
                 "success": False,
                 "error": str(e),
                 "message": "处理请求时发生错误"
+            }
+    
+    async def _execute_with_intelligent_coordinator(self, user_input: str) -> Dict[str, Any]:
+        """使用智能协调器执行任务（AI大脑路由）"""
+        try:
+            # 生成任务ID
+            import time
+            task_id = f"task_{int(time.time() * 1000000) % 10000000000}"
+            
+            # 使用智能协调器的 AI 大脑进行任务路由和执行
+            task_id = await self.coordinator.add_task(
+                task_id=task_id,
+                description=user_input,
+                use_ai_routing=True  # 启用 AI 智能路由
+            )
+            
+            # 执行任务
+            result = await self.coordinator.execute_next_task()
+            
+            return {
+                "success": True,
+                "task_id": task_id,
+                "result": result,
+                "routing_method": "AI智能协调器"
+            }
+            
+        except Exception as e:
+            logger.error(f"智能协调器执行失败: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "routing_method": "AI智能协调器"
             }
 
     async def _analyze_user_request(self, user_input: str) -> Dict[str, Any]:
@@ -280,13 +308,8 @@ class AutoGenMultiAgentSystem:
         else:
             key_concepts = analysis.get("key_concepts", []) if isinstance(analysis, dict) else []
         
-        # 需要实时信息的关键词（应该使用搜索）
-        realtime_keywords = [
-            "今天", "现在", "当前", "最新", "实时", "日期", "时间", "新闻", "进展", "资讯",
-            "today", "now", "current", "latest", "real-time", "date", "time", "news", "update"
-        ]
-        if any(keyword in user_input_lower for keyword in realtime_keywords):
-            return TaskType.RESEARCH
+        # 注意：简单的实时信息查询（如日期、时间）应该由通用助手处理
+        # 只有复杂的研究任务才路由到研究专家
         
         # 研究相关关键词
         research_keywords = ["研究", "调查", "分析", "搜索", "查找", "了解", "research", "investigate", "analyze"]
@@ -507,7 +530,20 @@ async def interactive_mode():
         
         while True:
             try:
-                user_input = input("\n👤 您: ").strip()
+                # 修复字符编码问题
+                try:
+                    user_input = input("\n👤 您: ").strip()
+                except UnicodeDecodeError:
+                    # 如果出现编码错误，尝试使用 sys.stdin 读取
+                    import sys
+                    user_input = sys.stdin.readline().strip()
+                
+                # 确保输入是有效的 UTF-8 字符串
+                if isinstance(user_input, bytes):
+                    user_input = user_input.decode('utf-8', errors='replace')
+                
+                # 记录原始输入用于调试
+                logger.info(f"处理用户请求: {user_input[:50]}...")
                 
                 if not user_input:
                     continue
@@ -535,8 +571,15 @@ async def interactive_mode():
             except KeyboardInterrupt:
                 print("\n\n👋 收到中断信号，正在退出...")
                 break
+            except EOFError:
+                print("\n\n👋 检测到EOF信号，正在退出...")
+                break
             except Exception as e:
                 print(f"❌ 处理错误: {e}")
+                # 如果是连续的相同错误，避免死循环
+                if "EOF" in str(e):
+                    print("\n👋 检测到输入流结束，正在退出...")
+                    break
         
     finally:
         await system.shutdown()

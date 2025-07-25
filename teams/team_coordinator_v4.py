@@ -91,8 +91,12 @@ class TeamCoordinator:
         self.name = name
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url or os.getenv("OPENAI_BASE_URL")
-        self.model = model
+        self.model = model or os.getenv("OPENAI_MODEL", "gemini-2.5-flash")
         self.max_agents = max_agents
+        
+        # AI智能大脑 - 使 Team Coordinator 成为智能 AI 代理
+        self.ai_brain = None
+        self._initialize_ai_brain()
         
         # 代理管理
         self.agents: Dict[str, ChatAgent] = {}
@@ -118,6 +122,161 @@ class TeamCoordinator:
         }
         
         logger.info(f"团队协调器 '{name}' 初始化完成")
+        if self.ai_brain:
+            logger.info(f"AI智能大脑已启用，使用模型: {self.model}")
+    
+    def _initialize_ai_brain(self):
+        """初始化 AI 智能大脑"""
+        try:
+            if self.api_key and self.base_url:
+                # 使用 Gemini 客户端作为 AI 大脑
+                self.ai_brain = create_gemini_client(
+                    api_key=self.api_key,
+                    base_url=self.base_url,
+                    model=self.model
+                )
+                logger.info("Team Coordinator AI大脑初始化成功")
+            else:
+                logger.warning("AI大脑初始化失败：缺少 API 密钥或 Base URL")
+        except Exception as e:
+            logger.error(f"AI大脑初始化错误: {e}")
+            self.ai_brain = None
+    
+    async def _intelligent_task_routing(self, user_request: str) -> Dict[str, Any]:
+        """使用 AI 大脑进行智能任务路由决策"""
+        if not self.ai_brain:
+            # 如果没有 AI 大脑，使用简单的关键词匹配
+            return self._fallback_routing(user_request)
+        
+        try:
+            # 构建智能路由提示
+            routing_prompt = f"""作为一个智能的团队协调器，请分析以下用户请求并决定最适合的任务类型和执行者。
+
+用户请求：{user_request}
+
+可用的任务类型和执行者：
+1. RESEARCH - AI研究专家：适用于复杂研究任务、深度分析、学术调查
+2. EMAIL - 智能邮件助手：适用于邮件发送、通知、沟通任务
+3. ANALYSIS - 数据分析专家：适用于数据分析、统计计算、评估任务
+4. GENERAL - 通用AI助手：适用于简单对话、实时信息查询、日常问题
+
+请考虑以下因素：
+- 任务的复杂度和专业性
+- 是否需要实时信息或搜索
+- 用户期望的回答风格（简洁 vs 详细）
+- 任务的紧急程度
+
+请以JSON格式返回决策：
+{{
+    "task_type": "任务类型",
+    "executor": "执行者名称",
+    "priority": "优先级(LOW/MEDIUM/HIGH/URGENT)",
+    "reasoning": "决策理由",
+    "expected_response_style": "期望的回答风格"
+}}"""
+            
+            # 调用 AI 大脑进行智能决策（使用 OpenAI 兼容格式）
+            import aiohttp
+            import json
+            
+            api_url = f"{self.base_url}/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [{
+                    "role": "user",
+                    "content": routing_prompt
+                }],
+                "temperature": 0.3,  # 低温度保证决策稳定性
+                "max_tokens": 1000
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # 使用 OpenAI 兼容格式解析响应
+                        ai_response = data['choices'][0]['message']['content']
+                        
+                        # 解析 AI 的 JSON 回答
+                        try:
+                            # 提取 JSON 部分
+                            json_start = ai_response.find('{')
+                            json_end = ai_response.rfind('}') + 1
+                            if json_start != -1 and json_end != -1:
+                                json_str = ai_response[json_start:json_end]
+                                routing_decision = json.loads(json_str)
+                                
+                                logger.info(f"AI智能路由决策: {routing_decision}")
+                                return routing_decision
+                        except json.JSONDecodeError:
+                            logger.warning("AI返回的JSON格式解析失败，使用备用路由")
+                    else:
+                        logger.error(f"AI智能路由API调用失败: {response.status}")
+                        response_text = await response.text()
+                        logger.error(f"错误响应: {response_text[:200]}...")
+                    
+        except Exception as e:
+            logger.error(f"AI智能路由错误: {e}")
+        
+        # 如果 AI 路由失败，使用备用路由
+        return self._fallback_routing(user_request)
+    
+    def _fallback_routing(self, user_request: str) -> Dict[str, Any]:
+        """备用路由逻辑（关键词匹配）"""
+        user_input_lower = user_request.lower()
+        
+        # 研究相关关键词
+        if any(keyword in user_input_lower for keyword in [
+            "研究", "调查", "分析", "搜索", "查找", "了解", 
+            "research", "investigate", "analyze", "study", "深入"
+        ]):
+            return {
+                "task_type": "RESEARCH",
+                "executor": "AI研究专家",
+                "priority": "MEDIUM",
+                "reasoning": "检测到研究相关关键词",
+                "expected_response_style": "详细研究报告"
+            }
+        
+        # 邮件相关关键词
+        if any(keyword in user_input_lower for keyword in [
+            "邮件", "发送", "写信", "通知", 
+            "email", "send", "write", "notify"
+        ]):
+            return {
+                "task_type": "EMAIL",
+                "executor": "智能邮件助手",
+                "priority": "HIGH",
+                "reasoning": "检测到邮件相关关键词",
+                "expected_response_style": "简洁直接"
+            }
+        
+        # 分析相关关键词
+        if any(keyword in user_input_lower for keyword in [
+            "统计", "计算", "评估", "数据", 
+            "calculate", "evaluate", "statistics", "data"
+        ]):
+            return {
+                "task_type": "ANALYSIS",
+                "executor": "数据分析专家",
+                "priority": "MEDIUM",
+                "reasoning": "检测到分析相关关键词",
+                "expected_response_style": "结构化分析"
+            }
+        
+        # 默认使用通用助手
+        return {
+            "task_type": "GENERAL",
+            "executor": "通用AI助手",
+            "priority": "MEDIUM",
+            "reasoning": "默认路由到通用助手",
+            "expected_response_style": "简洁直接"
+        }
 
     async def create_agent(
         self,
@@ -171,19 +330,23 @@ class TeamCoordinator:
                     }
                     if self.base_url:
                         client_kwargs["base_url"] = self.base_url
-                        # 为非标准模型提供model_info
+                        
+                    # 为非标准模型（如 Gemini）提供 model_info
+                    if "gemini" in self.model.lower() or "gpt" not in self.model.lower():
                         try:
                             from autogen_ext.models.openai import ModelInfo
                             client_kwargs["model_info"] = ModelInfo(
-                                vision=True,
-                                function_calling=True,
+                                family="gemini",  # AutoGen v0.4.7+ 必需字段
+                                vision=False,
+                                function_calling=False,
                                 json_output=True
                             )
                         except ImportError:
-                            # 如果无法导入ModelInfo，使用简单的字典
+                            # 如果无法导入ModelInfo，使用字典格式
                             client_kwargs["model_info"] = {
-                                "vision": True,
-                                "function_calling": True,
+                                "family": "gemini",
+                                "vision": False,
+                                "function_calling": False,
                                 "json_output": True
                             }
                     
@@ -257,12 +420,38 @@ class TeamCoordinator:
         priority: TaskPriority = TaskPriority.MEDIUM,
         assigned_agent: Optional[str] = None,
         assigned_team: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        use_ai_routing: bool = True
     ) -> str:
-        """添加新任务"""
+        """添加新任务（支持AI智能路由）"""
         try:
             if task_id in self.tasks:
                 raise ValueError(f"任务ID '{task_id}' 已存在")
+            
+            # 使用 AI 智能路由决策（如果启用且未指定代理）
+            routing_decision = None
+            if use_ai_routing and not assigned_agent and not assigned_team:
+                logger.info(f"使用AI智能大脑进行任务路由决策: {description}")
+                routing_decision = await self._intelligent_task_routing(description)
+                
+                # 根据 AI 决策更新任务参数
+                if routing_decision:
+                    task_type_str = routing_decision.get("task_type", "GENERAL")
+                    try:
+                        task_type = TaskType(task_type_str.lower())
+                    except ValueError:
+                        task_type = TaskType.GENERAL
+                    
+                    priority_str = routing_decision.get("priority", "MEDIUM")
+                    try:
+                        priority = TaskPriority[priority_str]
+                    except KeyError:
+                        priority = TaskPriority.MEDIUM
+                    
+                    assigned_agent = routing_decision.get("executor")
+                    
+                    logger.info(f"AI路由决策结果: 任务类型={task_type.value}, 优先级={priority.name}, 执行者={assigned_agent}")
+                    logger.info(f"AI决策理由: {routing_decision.get('reasoning', '未提供')}")
             
             # 创建任务
             task = {
@@ -277,10 +466,11 @@ class TeamCoordinator:
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
                 "result": None,
-                "error": None
+                "error": None,
+                "ai_routing_decision": routing_decision  # 保存 AI 决策信息
             }
             
-            # 自动分配代理（如果未指定）
+            # 自动分配代理（如果仍未指定）
             if not assigned_agent and not assigned_team:
                 assigned_agent = await self._auto_assign_agent(task_type)
                 task["assigned_agent"] = assigned_agent

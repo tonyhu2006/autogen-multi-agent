@@ -91,29 +91,25 @@ class GeminiClient:
                     timeout=aiohttp.ClientTimeout(total=self.timeout)
                 )
             
-            # 构建 Gemini API URL
-            api_url = f"{self.base_url}/v1beta/models/{self.model}:generateContent"
+            # 构建 OpenAI 兼容 API URL
+            api_url = f"{self.base_url}/v1/chat/completions"
             
-            # 构建请求头
+            # 构建请求头（OpenAI 兼容格式）
             headers = {
                 "Content-Type": "application/json",
-                "x-goog-api-key": self.api_key
+                "Authorization": f"Bearer {self.api_key}"
             }
             
-            # 构建请求体（Gemini 原生格式）
+            # 构建请求体（OpenAI 兼容格式）
             payload = {
-                "contents": [{
+                "model": self.model,
+                "messages": [{
                     "role": "user",
-                    "parts": [{
-                        "text": prompt
-                    }]
+                    "content": prompt
                 }],
-                "generationConfig": {
-                    "temperature": temperature,
-                    "maxOutputTokens": max_output_tokens,
-                    "topP": top_p,
-                    "topK": top_k
-                }
+                "temperature": temperature,
+                "max_tokens": max_output_tokens,
+                "top_p": top_p
             }
             
             logger.info(f"调用 Gemini API: {api_url}")
@@ -122,9 +118,9 @@ class GeminiClient:
                 if response.status == 200:
                     result = await response.json()
                     
-                    # Gemini API响应格式
-                    if 'candidates' in result and len(result['candidates']) > 0:
-                        content = result['candidates'][0]['content']['parts'][0]['text']
+                    # OpenAI 兼容格式的响应解析
+                    if 'choices' in result and len(result['choices']) > 0:
+                        content = result['choices'][0]['message']['content']
                         logger.info("AI分析成功")
                         return content
                     else:

@@ -98,16 +98,235 @@ class EnhancedAssistantAgent(AssistantAgent):
             self.protocol_manager = None
             self._protocols_initialized = True
         
+        # 搜索功能配置（用于简单实时信息查询）
+        self.brave_api_key = os.getenv("BRAVE_API_KEY")
+        self.search_engine_url = os.getenv("SEARCH_ENGINE_BASE_URL")
+        self.enable_simple_search = bool(self.brave_api_key or self.search_engine_url)
+        
         # 代理状态
         self.conversation_history = []
         self.cognitive_state = {}
         self.performance_metrics = {
             "messages_processed": 0,
             "cognitive_analyses": 0,
-            "protocol_activations": 0
+            "protocol_activations": 0,
+            "simple_searches": 0
         }
         
         logger.info(f"增强型助手代理 '{name}' 初始化完成 (v0.4 API)")
+        if self.enable_simple_search:
+            logger.info(f"简单搜索功能已启用 ({'Brave' if self.brave_api_key else 'SearXNG'})")
+    
+    def _needs_real_time_info(self, query: str) -> bool:
+        """判断查询是否需要实时信息"""
+        # 扩展实时信息关键词，包括更多类型的实时查询
+        realtime_keywords = [
+            # 时间相关
+            "今天", "现在", "当前", "最新", "实时", "日期", "时间",
+            "today", "now", "current", "latest", "real-time", "date", "time",
+            # 新闻与事件
+            "新闻", "事件", "发生", "最近", "刚刚", "刚才",
+            "news", "event", "happened", "recent", "just", "breaking",
+            # 市场与经济
+            "股价", "汇率", "价格", "市场", "行情",
+            "stock", "price", "market", "exchange", "rate",
+            # 天气与环境
+            "天气", "温度", "气温", "降雨", "风速",
+            "weather", "temperature", "rain", "wind", "forecast",
+            # 体育与赛事
+            "比赛", "赛事", "比分", "结果", "排名",
+            "match", "game", "score", "result", "ranking",
+            # 交通与出行
+            "交通", "堵车", "航班", "列车", "公交",
+            "traffic", "flight", "train", "bus", "delay"
+        ]
+        query_lower = query.lower()
+        return any(keyword in query_lower for keyword in realtime_keywords)
+    
+    async def _simple_search(self, query: str) -> str:
+        """执行简单搜索，获取实时信息"""
+        # 优先使用配置的搜索引擎获取实时信息
+        if self.enable_simple_search:
+            try:
+                import aiohttp
+                
+                if self.search_engine_url:  # 使用 SearXNG
+                    result = await self._search_with_searxng(query)
+                    if result:
+                        return result
+                elif self.brave_api_key:  # 使用 Brave Search
+                    result = await self._search_with_brave(query)
+                    if result:
+                        return result
+                        
+            except Exception as e:
+                logger.error(f"搜索引擎查询失败: {e}")
+        
+        # 如果搜索引擎不可用或失败，尝试简单的HTTP搜索作为备用
+        try:
+            result = await self._fallback_http_search(query)
+            if result:
+                return result
+        except Exception as e:
+            logger.error(f"备用HTTP搜索失败: {e}")
+        
+        # 对于日期时间查询提供本地备用
+        if self._is_datetime_query(query):
+            return self._get_local_datetime_info(query)
+            
+        # 其他实时信息查询无法处理
+        return None
+    
+    def _is_datetime_query(self, query: str) -> bool:
+        """判断是否为日期时间查询"""
+        datetime_keywords = [
+            "日期", "今天", "时间", "现在", "当前时间",
+            "date", "today", "time", "now", "current time"
+        ]
+        query_lower = query.lower()
+        return any(keyword in query_lower for keyword in datetime_keywords)
+    
+    def _get_local_datetime_info(self, query: str) -> str:
+        """获取本地日期时间信息（仅作为备用）"""
+        try:
+            from datetime import datetime
+            
+            now = datetime.now()
+            query_lower = query.lower()
+            
+            if any(keyword in query_lower for keyword in ["日期", "date", "今天"]):
+                return f"今天的日期是: {now.strftime('%Y年%m月%d日')} (星期{['', '一', '二', '三', '四', '五', '六', '日'][now.weekday() + 1]})"
+            elif any(keyword in query_lower for keyword in ["时间", "time", "现在"]):
+                return f"现在的时间是: {now.strftime('%Y年%m月%d日 %H:%M:%S')}"
+            else:
+                return f"当前日期时间: {now.strftime('%Y年%m月%d日 %H:%M:%S')} (星期{['', '一', '二', '三', '四', '五', '六', '日'][now.weekday() + 1]})"
+                
+        except Exception as e:
+            logger.error(f"获取本地日期时间失败: {e}")
+            return None
+    
+    async def _search_with_searxng(self, query: str) -> str:
+        """使用 SearXNG 搜索"""
+        try:
+            import aiohttp
+            
+            async with aiohttp.ClientSession() as session:
+                params = {
+                    'q': query,
+                    'format': 'json',
+                    'engines': 'google,bing',
+                    'safesearch': '1'
+                }
+                
+                # 直接使用配置的 URL，不再添加 /search
+                async with session.get(self.search_engine_url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        results = data.get('results', [])
+                        
+                        if results:
+                            # 提取前3个结果的标题和内容
+                            search_info = []
+                            for result in results[:3]:
+                                title = result.get('title', '')
+                                content = result.get('content', '')
+                                if title or content:
+                                    search_info.append(f"{title}: {content}")
+                            
+                            self.performance_metrics["simple_searches"] += 1
+                            return "\n".join(search_info)
+                            
+        except Exception as e:
+            logger.error(f"SearXNG 搜索错误: {e}")
+            return None
+    
+    async def _search_with_brave(self, query: str) -> str:
+        """使用 Brave Search 搜索"""
+        try:
+            import aiohttp
+            
+            headers = {
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "X-Subscription-Token": self.brave_api_key
+            }
+            
+            params = {
+                "q": query,
+                "count": 3,
+                "offset": 0,
+                "mkt": "zh-CN"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://api.search.brave.com/res/v1/web/search",
+                    headers=headers,
+                    params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        results = data.get('web', {}).get('results', [])
+                        
+                        if results:
+                            # 提取前3个结果的标题和描述
+                            search_info = []
+                            for result in results[:3]:
+                                title = result.get('title', '')
+                                description = result.get('description', '')
+                                if title or description:
+                                    search_info.append(f"{title}: {description}")
+                            
+                            self.performance_metrics["simple_searches"] += 1
+                            return "\n".join(search_info)
+                            
+        except Exception as e:
+            logger.error(f"Brave Search 搜索错误: {e}")
+            return None
+    
+    async def _fallback_http_search(self, query: str) -> str:
+        """备用HTTP搜索功能，使用免费的搜索API"""
+        try:
+            import aiohttp
+            import urllib.parse
+            
+            # 使用DuckDuckGo Instant Answer API作为备用
+            encoded_query = urllib.parse.quote(query)
+            url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        # 尝试获取即时答案
+                        instant_answer = data.get('AbstractText', '')
+                        if instant_answer:
+                            self.performance_metrics["simple_searches"] += 1
+                            return f"搜索结果: {instant_answer}"
+                        
+                        # 尝试获取相关主题
+                        related_topics = data.get('RelatedTopics', [])
+                        if related_topics:
+                            results = []
+                            for topic in related_topics[:3]:
+                                if isinstance(topic, dict) and 'Text' in topic:
+                                    results.append(topic['Text'])
+                            
+                            if results:
+                                self.performance_metrics["simple_searches"] += 1
+                                return "搜索结果:\n" + "\n".join(results)
+                        
+                        # 尝试获取答案
+                        answer = data.get('Answer', '')
+                        if answer:
+                            self.performance_metrics["simple_searches"] += 1
+                            return f"搜索结果: {answer}"
+                            
+        except Exception as e:
+            logger.error(f"备用HTTP搜索错误: {e}")
+            
+        return None
 
     def _build_system_message(self, agent_type: str, cognitive_level: CognitiveLevel) -> str:
         """构建系统消息"""
@@ -126,6 +345,26 @@ class EnhancedAssistantAgent(AssistantAgent):
         try:
             # 更新性能指标
             self.performance_metrics["messages_processed"] += 1
+            
+            # 获取最新消息内容
+            last_message = messages[-1]
+            query = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            
+            # 检查是否需要实时信息搜索（仅限通用助手）
+            if (self.agent_type == "assistant" and 
+                self.enable_simple_search and 
+                self._needs_real_time_info(query)):
+                
+                logger.info(f"通用助手检测到实时信息查询，执行简单搜索: {query}")
+                search_result = await self._simple_search(query)
+                
+                if search_result:
+                    # 将搜索结果添加到查询中
+                    enhanced_query = f"用户问题: {query}\n\n最新搜索信息:\n{search_result}\n\n请基于以上搜索信息简洁直接地回答用户问题。不要生成研究报告格式。"
+                    # 创建增强的消息
+                    enhanced_message = TextMessage(content=enhanced_query, source="system")
+                    messages = messages[:-1] + [enhanced_message]
+                    logger.info("已将搜索结果集成到查询中")
             
             # 认知分析
             if len(messages) > 0:
@@ -146,13 +385,15 @@ class EnhancedAssistantAgent(AssistantAgent):
             else:
                 processed_messages = messages
             
-            # 模型推理 - 直接使用 Gemini API 如果是 Gemini 模型
-            if (hasattr(self, 'model_client') and 
-                hasattr(self.model_client, 'model') and 
-                'gemini' in str(self.model_client.model).lower()):
-                response = await self._direct_gemini_call(processed_messages)
-            else:
+            # 模型推理 - 使用直接调用方式绕过 AutoGen 框架兼容性问题
+            # 这样可以确保稳定的 API 调用和响应处理
+            try:
+                # 尝试使用 AutoGen 标准流程
                 response = await super().on_messages(processed_messages, cancellation_token)
+            except Exception as autogen_error:
+                logger.warning(f"AutoGen 标准流程失败，使用直接调用: {autogen_error}")
+                # 使用直接 Gemini 调用作为备用方案
+                response = await self._direct_gemini_call(processed_messages)
             
             # 记录对话历史
             self.conversation_history.extend(messages)
@@ -169,10 +410,43 @@ class EnhancedAssistantAgent(AssistantAgent):
             )
     
     async def _direct_gemini_call(self, messages: List[ChatMessage]) -> ChatMessage:
-        """直接调用 Gemini API，绕过 AutoGen 客户端接口问题"""
+        """直接调用 Gemini API，使用 OpenAI 兼容格式和缓存的环境变量"""
         try:
             import aiohttp
+            import sys
             import os
+            
+            # 添加 utils 目录到路径
+            utils_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils')
+            if utils_path not in sys.path:
+                sys.path.append(utils_path)
+            
+            # 使用缓存的环境变量管理器
+            try:
+                from env_cache_manager import get_cached_api_config, validate_cached_config
+                
+                # 验证缓存的配置
+                if not validate_cached_config():
+                    raise ValueError("缓存的环境变量配置无效")
+                
+                # 获取缓存的API配置
+                config = get_cached_api_config()
+                api_key = config['api_key']
+                base_url = config['base_url']
+                model = config['model']
+                
+                logger.info(f"使用缓存的环境变量: API Key长度={len(api_key)}, Base URL={base_url}")
+                
+            except ImportError:
+                # 回退到直接读取环境变量
+                logger.warning("无法导入环境变量缓存管理器，回退到直接读取")
+                api_key = os.getenv('OPENAI_API_KEY')
+                base_url = os.getenv('OPENAI_BASE_URL')
+                model = os.getenv('OPENAI_MODEL', 'gemini-2.5-flash')
+                
+                # 验证必需的环境变量
+                if not api_key or not base_url:
+                    raise ValueError("缺少必需的环境变量: OPENAI_API_KEY 和 OPENAI_BASE_URL")
             
             # 提取消息内容
             prompt_parts = []
@@ -184,34 +458,22 @@ class EnhancedAssistantAgent(AssistantAgent):
             
             prompt = "\n\n".join(prompt_parts)
             
-            # 从环境变量读取配置，确保安全性
-            api_key = os.getenv('OPENAI_API_KEY')
-            base_url = os.getenv('OPENAI_BASE_URL')
-            model = os.getenv('OPENAI_MODEL', 'gemini-2.5-flash')
-            
-            # 验证必需的环境变量
-            if not api_key or not base_url:
-                raise ValueError("缺少必需的环境变量: OPENAI_API_KEY 和 OPENAI_BASE_URL")
-            
-            api_url = f"{base_url}/v1beta/models/{model}:generateContent"
+            # 使用 OpenAI 兼容格式
+            api_url = f"{base_url}/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
-                "x-goog-api-key": api_key
+                "Authorization": f"Bearer {api_key}"
             }
             
             payload = {
-                "contents": [{
+                "model": model,
+                "messages": [{
                     "role": "user",
-                    "parts": [{
-                        "text": prompt
-                    }]
+                    "content": prompt
                 }],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 1000,
-                    "topP": 0.8,
-                    "topK": 10
-                }
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.8
             }
             
             # 使用简化的、验证过的 API 调用方式
@@ -227,8 +489,9 @@ class EnhancedAssistantAgent(AssistantAgent):
                         if status == 200:
                             try:
                                 result = await response.json()
-                                if 'candidates' in result and len(result['candidates']) > 0:
-                                    content = result['candidates'][0]['content']['parts'][0]['text']
+                                # 处理 OpenAI 兼容格式的响应
+                                if 'choices' in result and len(result['choices']) > 0:
+                                    content = result['choices'][0]['message']['content']
                                     logger.info("直接 Gemini 调用成功")
                                     return TextMessage(
                                         content=content,
@@ -298,13 +561,13 @@ class EnhancedAssistantAgent(AssistantAgent):
             processed_messages = []
             
             for message in messages:
+                
                 # 应用通信协议
                 comm_result = await self.protocol_manager.apply_protocol(
                     ProtocolType.COMMUNICATION,
                     {"message": message.content if hasattr(message, 'content') else str(message)}
                 )
                 
-                # 创建处理后的消息
                 if comm_result.get("success", False):
                     enhanced_content = comm_result.get("enhanced_message", message.content)
                     if hasattr(message, 'content'):
@@ -445,6 +708,7 @@ async def create_enhanced_agent(
     name: str,
     agent_type: str,
     api_key: str,
+    base_url: Optional[str] = None,
     model: str = "gpt-4o",
     cognitive_level: CognitiveLevel = CognitiveLevel.DEEP,
     **kwargs
@@ -452,10 +716,34 @@ async def create_enhanced_agent(
     """创建增强型代理的工厂函数"""
     
     # 创建模型客户端
-    model_client = OpenAIChatCompletionClient(
-        model=model,
-        api_key=api_key
-    )
+    client_kwargs = {
+        "model": model,
+        "api_key": api_key
+    }
+    
+    # 添加 base_url 如果提供了
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    
+    # 为非标准模型（如 Gemini）添加 model_info
+    if "gemini" in model.lower() or "gpt" not in model.lower():
+        try:
+            from autogen_ext.models.openai import ModelInfo
+            client_kwargs["model_info"] = ModelInfo(
+                family="gemini",  # AutoGen v0.4.7+ 必需字段
+                vision=False,
+                function_calling=False,
+                json_output=True
+            )
+        except ImportError:
+            client_kwargs["model_info"] = {
+                "family": "gemini",
+                "vision": False,
+                "function_calling": False,
+                "json_output": True
+            }
+    
+    model_client = OpenAIChatCompletionClient(**client_kwargs)
     
     # 创建代理
     agent = EnhancedAssistantAgent(
@@ -467,6 +755,39 @@ async def create_enhanced_agent(
     )
     
     return agent
+
+
+async def create_enhanced_assistant_agent(
+    name: str,
+    system_message: str = "你是一个智能助手代理",
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: str = "gemini-2.5-flash",
+    **kwargs
+) -> EnhancedAssistantAgent:
+    """
+    创建增强型助手代理的便捷工厂函数
+    
+    Args:
+        name: 代理名称
+        system_message: 系统消息
+        api_key: API密钥
+        base_url: API基础URL
+        model: 模型名称
+        **kwargs: 其他参数
+    
+    Returns:
+        EnhancedAssistantAgent: 创建的代理实例
+    """
+    return await create_enhanced_agent(
+        name=name,
+        agent_type="assistant",
+        system_message=system_message,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        **kwargs
+    )
 
 
 # 使用示例
