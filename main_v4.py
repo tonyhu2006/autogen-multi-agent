@@ -263,10 +263,14 @@ class AutoGenMultiAgentSystem:
                 "error": str(e)
             }
 
-    def _determine_task_type(self, user_input: str, analysis: Dict[str, Any]) -> TaskType:
+    def _determine_task_type(self, user_input: str, analysis) -> TaskType:
         """确定任务类型"""
         user_input_lower = user_input.lower()
-        key_concepts = analysis.get("key_concepts", [])
+        # 处理 CognitiveAnalysisResult 对象或字典
+        if hasattr(analysis, 'concepts'):
+            key_concepts = analysis.concepts
+        else:
+            key_concepts = analysis.get("key_concepts", []) if isinstance(analysis, dict) else []
         
         # 研究相关关键词
         research_keywords = ["研究", "调查", "分析", "搜索", "查找", "了解", "research", "investigate", "analyze"]
