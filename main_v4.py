@@ -28,7 +28,7 @@ from agents.base_agent_v4 import EnhancedAssistantAgent
 from agents.research_agent_v4 import EnhancedResearchAgent, create_research_agent
 from agents.email_agent_v4 import EnhancedEmailAgent, create_email_agent
 from teams.team_coordinator_v4 import TeamCoordinator, TaskType, TaskPriority
-from cognitive_context.cognitive_analysis import CognitiveAnalysis, CognitiveLevel
+from cognitive_context.cognitive_analysis import CognitiveTools, CognitiveLevel
 
 # 自定义JSON编码器，处理枚举类型
 class CustomJSONEncoder(json.JSONEncoder):
