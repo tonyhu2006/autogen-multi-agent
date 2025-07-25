@@ -157,8 +157,8 @@ async def main():
 *如有问题，请检查系统日志*
 """
     
-    # 发送测试邮件
-    recipient = "hoojd2012@gmail.com"
+    # 发送测试邮件 - 从环境变量读取收件人
+    recipient = os.getenv("TEST_RECIPIENT_EMAIL", "your-email@example.com")
     logger.info(f"📧 发送测试邮件到: {recipient}")
     
     success = await send_smtp_email_direct(

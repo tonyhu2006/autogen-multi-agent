@@ -184,10 +184,14 @@ class EnhancedAssistantAgent(AssistantAgent):
             
             prompt = "\n\n".join(prompt_parts)
             
-            # 强制使用验证过的参数，确保与成功的验证一致
-            api_key = 'Hjd-961207hjd'  # 已验证有效的 API 密钥
-            base_url = 'http://84.8.145.89:8000'  # 已验证有效的基础 URL
-            model = 'gemini-2.5-flash'  # 已验证有效的模型
+            # 从环境变量读取配置，确保安全性
+            api_key = os.getenv('OPENAI_API_KEY')
+            base_url = os.getenv('OPENAI_BASE_URL')
+            model = os.getenv('OPENAI_MODEL', 'gemini-2.5-flash')
+            
+            # 验证必需的环境变量
+            if not api_key or not base_url:
+                raise ValueError("缺少必需的环境变量: OPENAI_API_KEY 和 OPENAI_BASE_URL")
             
             api_url = f"{base_url}/v1beta/models/{model}:generateContent"
             headers = {

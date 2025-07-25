@@ -55,7 +55,7 @@ class ScheduledResearchSystem:
                             "enabled": True,
                             "recipients": [
                                 {
-                                    "email": "hoojd2012@gmail.com",
+                                    "email": "your-email@example.com",
                                     "name": "研究员"
                                 }
                             ]
@@ -67,7 +67,7 @@ class ScheduledResearchSystem:
                             "enabled": False,
                             "recipients": [
                                 {
-                                    "email": "hoojd2012@gmail.com", 
+                                    "email": "your-email@example.com", 
                                     "name": "技术专家"
                                 }
                             ]

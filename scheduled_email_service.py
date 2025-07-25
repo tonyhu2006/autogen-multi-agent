@@ -98,15 +98,15 @@ class SimpleScheduledEmailService:
         default_schedules = [
             EmailScheduleConfig(
                 topic="AGI人工智能",
-                recipient="hoojd2012@gmail.com",
+                recipient="your-email@example.com",
                 schedule_time="09:00",
                 frequency="daily",
                 subject_template="每日AGI研究动态 - {date}",
-                enabled=True  # 默认启用
+                enabled=False  # 默认禁用，避免意外发送
             ),
             EmailScheduleConfig(
                 topic="科技新闻",
-                recipient="hoojd2012@gmail.com", 
+                recipient="your-email@example.com", 
                 schedule_time="18:00",
                 frequency="daily",
                 subject_template="每日科技资讯 - {date}",
