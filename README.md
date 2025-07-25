@@ -362,6 +362,10 @@ SENDER_NAME=AI研究系统
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 
+# SearXNG 搜索引擎配置
+SEARCH_ENGINE_BASE_URL=http://localhost:8080
+SEARCH_ENGINE_API_KEY=optional_api_key_if_required
+
 # 可选配置
 LOG_LEVEL=INFO
 MAX_RETRIES=3
@@ -404,6 +408,290 @@ TIMEOUT_SECONDS=30
 | `frequency` | string | 发送频率 | "daily", "weekly", "monthly" |
 | `subject_template` | string | 邮件主题模板 | "研究报告 - {date}" |
 | `enabled` | boolean | 是否启用此调度 | true, false |
+
+### 🔍 SearXNG 搜索引擎配置
+
+SearXNG 是一个免费、开源的元搜索引擎，为研究代理提供实时信息搜索能力。
+
+#### 🐳 Docker 部署 SearXNG
+
+**1. 创建 Docker Compose 文件**
+
+创建 `docker-compose.yml`：
+```yaml
+version: '3.7'
+
+services:
+  searxng:
+    container_name: searxng
+    image: searxng/searxng:latest
+    networks:
+      - searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  redis:
+    container_name: redis
+    image: "redis:alpine"
+    command: redis-server --save "" --appendonly "no"
+    networks:
+      - searxng
+    tmpfs:
+      - /var/lib/redis
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+
+networks:
+  searxng:
+    ipam:
+      driver: default
+```
+
+**2. 创建 SearXNG 配置文件**
+
+创建 `searxng/settings.yml`：
+```yaml
+# SearXNG 配置文件
+use_default_settings: true
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "your-secret-key-here"  # 请更换为随机字符串
+  base_url: http://localhost:8080/
+  image_proxy: true
+
+ui:
+  static_use_hash: true
+  default_locale: "zh-CN"
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+  cache_url: "redis://redis:6379/0"
+
+search:
+  safe_search: 0
+  autocomplete: "google"
+  default_lang: "zh-CN"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+  formats:
+    - html
+    - json
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    use_mobile_ui: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    base_url: 'https://{language}.wikipedia.org/'
+```
+
+**3. 启动 SearXNG**
+```bash
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f searxng
+
+# 停止服务
+docker-compose down
+```
+
+#### 🔧 系统集成配置
+
+**1. 环境变量配置**
+
+在 `.env.local` 中添加：
+```env
+# SearXNG 搜索引擎配置
+SEARCH_ENGINE_BASE_URL=http://localhost:8080
+SEARCH_ENGINE_API_KEY=  # SearXNG 不需要 API Key
+```
+
+**2. 配置参数说明**
+
+| 参数 | 说明 | 默认值 | 示例 |
+|------|------|--------|------|
+| `SEARCH_ENGINE_BASE_URL` | SearXNG 服务地址 | `http://localhost:8080` | `http://your-server:8080` |
+| `SEARCH_ENGINE_API_KEY` | API 密钥（可选） | 空 | 不需要 |
+
+#### 🧪 功能测试
+
+**1. 手动测试 SearXNG**
+```bash
+# 测试 SearXNG 服务
+curl "http://localhost:8080/search?q=artificial+intelligence&format=json"
+```
+
+**2. 系统集成测试**
+```python
+# 创建测试脚本 test_searxng.py
+import asyncio
+import aiohttp
+import os
+from dotenv import load_dotenv
+
+load_dotenv('.env.local')
+
+async def test_searxng():
+    base_url = os.getenv('SEARCH_ENGINE_BASE_URL', 'http://localhost:8080')
+    search_url = f"{base_url}/search"
+    
+    params = {
+        'q': 'AGI 人工智能',
+        'format': 'json',
+        'categories': 'general'
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(search_url, params=params) as response:
+            if response.status == 200:
+                data = await response.json()
+                print(f"✅ SearXNG 测试成功！")
+                print(f"搜索结果数量：{len(data.get('results', []))}条")
+                return True
+            else:
+                print(f"❌ SearXNG 测试失败：{response.status}")
+                return False
+
+if __name__ == "__main__":
+    asyncio.run(test_searxng())
+```
+
+运行测试：
+```bash
+python test_searxng.py
+```
+
+#### 🔍 高级配置
+
+**1. 自定义搜索引擎**
+
+在 `searxng/settings.yml` 中添加更多搜索引擎：
+```yaml
+engines:
+  # 中文搜索引擎
+  - name: baidu
+    engine: baidu
+    shortcut: bd
+    language: zh-CN
+    
+  - name: sogou
+    engine: sogou
+    shortcut: sg
+    language: zh-CN
+    
+  # 学术搜索
+  - name: google scholar
+    engine: google_scholar
+    shortcut: gs
+    
+  - name: arxiv
+    engine: arxiv
+    shortcut: arx
+```
+
+**2. 搜索结果过滤**
+```yaml
+search:
+  # 过滤低质量结果
+  formats:
+    - html
+    - json
+  
+  # 设置默认语言
+  default_lang: "zh-CN"
+  
+  # 安全搜索级别
+  safe_search: 1  # 0=关闭, 1=中等, 2=严格
+```
+
+**3. 性能优化**
+```yaml
+server:
+  # 启用缓存
+  method: "GET"
+  
+ui:
+  # 缓存配置
+  cache_url: "redis://redis:6379/0"
+  static_use_hash: true
+```
+
+#### 🛠️ 故障排除
+
+**常见问题及解决方案：**
+
+1. **连接拒绝 (Connection Refused)**
+   ```bash
+   # 检查服务状态
+   docker-compose ps
+   
+   # 重启服务
+   docker-compose restart searxng
+   ```
+
+2. **搜索结果为空**
+   ```bash
+   # 检查日志
+   docker-compose logs searxng
+   
+   # 更新配置文件
+   docker-compose restart
+   ```
+
+3. **端口冲突**
+   ```yaml
+   # 修改 docker-compose.yml 中的端口
+   ports:
+     - "8081:8080"  # 使用不同端口
+   ```
+
+**监控和维护：**
+```bash
+# 查看资源使用
+docker stats searxng redis
+
+# 备份配置
+cp -r searxng searxng_backup
+
+# 更新 SearXNG
+docker-compose pull
+docker-compose up -d
+```
 
 ---
 
