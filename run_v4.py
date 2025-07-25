@@ -24,10 +24,10 @@ from main_v4 import AutoGenMultiAgentSystem, interactive_mode, print_help
 
 def setup_environment():
     """设置环境"""
-    # 加载环境变量
+    # 加载环境变量（正确顺序：先加载通用配置，再加载本地配置）
     from dotenv import load_dotenv
-    load_dotenv('.env.local')  # 优先加载 .env.local
-    load_dotenv('.env')        # 然后加载 .env
+    load_dotenv('.env')        # 先加载通用配置
+    load_dotenv('.env.local', override=True)  # 再加载本地配置（强制覆盖，优先级更高）
     
     # 检查必要的环境变量
     required_vars = ["OPENAI_API_KEY"]
