@@ -178,6 +178,61 @@ class SimpleScheduledEmailService:
         else:
             logger.error(f"无效的调度索引: {index}")
     
+    def edit_schedule(self, index: int, **kwargs):
+        """编辑邮件调度配置"""
+        if 0 <= index < len(self.schedules):
+            schedule = self.schedules[index]
+            old_config = {
+                'topic': schedule.topic,
+                'recipient': schedule.recipient,
+                'schedule_time': schedule.schedule_time,
+                'frequency': schedule.frequency,
+                'subject_template': schedule.subject_template,
+                'enabled': schedule.enabled
+            }
+            
+            # 更新配置
+            if 'topic' in kwargs:
+                schedule.topic = kwargs['topic']
+            if 'recipient' in kwargs:
+                schedule.recipient = kwargs['recipient']
+            if 'schedule_time' in kwargs:
+                schedule.schedule_time = kwargs['schedule_time']
+            if 'frequency' in kwargs:
+                schedule.frequency = kwargs['frequency']
+            if 'subject_template' in kwargs:
+                schedule.subject_template = kwargs['subject_template']
+            if 'enabled' in kwargs:
+                schedule.enabled = kwargs['enabled']
+            
+            self.save_schedules()
+            logger.info(f"编辑了邮件调度: {old_config['topic']} -> {schedule.topic}")
+            
+            # 重新设置调度
+            if self.running:
+                self.setup_schedules()
+            
+            return True
+        else:
+            logger.error(f"无效的调度索引: {index}")
+            return False
+    
+    def delete_schedule(self, index: int):
+        """删除邮件调度配置"""
+        if 0 <= index < len(self.schedules):
+            deleted_schedule = self.schedules.pop(index)
+            self.save_schedules()
+            logger.info(f"删除了邮件调度: {deleted_schedule.topic} -> {deleted_schedule.recipient}")
+            
+            # 重新设置调度
+            if self.running:
+                self.setup_schedules()
+            
+            return True
+        else:
+            logger.error(f"无效的调度索引: {index}")
+            return False
+    
     async def initialize_agents(self):
         """初始化代理"""
         try:
@@ -412,13 +467,15 @@ async def main():
         print("\n📋 可用操作:")
         print("1. 查看邮件调度")
         print("2. 添加邮件调度")
-        print("3. 启用/禁用调度")
-        print("4. 启动定时服务")
-        print("5. 测试发送邮件")
+        print("3. 编辑邮件调度")
+        print("4. 删除邮件调度")
+        print("5. 启用/禁用调度")
+        print("6. 启动定时服务")
+        print("7. 测试发送邮件")
         print("0. 退出")
         
         try:
-            choice = input("\n请选择操作 (0-5): ").strip()
+            choice = input("\n请选择操作 (0-7): ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n👋 检测到退出信号，正在关闭服务...")
             service.stop_service()
@@ -438,6 +495,74 @@ async def main():
             service.add_schedule(topic, recipient, schedule_time, frequency)
             print("✅ 邮件调度已添加")
         elif choice == "3":
+            # 编辑邮件调度
+            if not service.schedules:
+                print("❌ 暂无邮件调度配置")
+                continue
+                
+            service.list_schedules()
+            try:
+                index = int(input("请输入要编辑的调度编号: "))
+                if 0 <= index < len(service.schedules):
+                    schedule = service.schedules[index]
+                    print(f"\n📝 编辑调度: {schedule.topic}")
+                    print("直接回车保持原值，输入新值进行修改")
+                    
+                    # 获取新的配置值
+                    new_topic = input(f"主题关键词 [{schedule.topic}]: ").strip()
+                    new_recipient = input(f"收件人邮箱 [{schedule.recipient}]: ").strip()
+                    new_schedule_time = input(f"发送时间 [{schedule.schedule_time}]: ").strip()
+                    new_frequency = input(f"频率 [{schedule.frequency}]: ").strip()
+                    new_subject_template = input(f"邮件主题模板 [{schedule.subject_template}]: ").strip()
+                    
+                    # 构建更新参数
+                    update_params = {}
+                    if new_topic:
+                        update_params['topic'] = new_topic
+                    if new_recipient:
+                        update_params['recipient'] = new_recipient
+                    if new_schedule_time:
+                        update_params['schedule_time'] = new_schedule_time
+                    if new_frequency:
+                        update_params['frequency'] = new_frequency
+                    if new_subject_template:
+                        update_params['subject_template'] = new_subject_template
+                    
+                    if update_params:
+                        if service.edit_schedule(index, **update_params):
+                            print("✅ 邮件调度已更新")
+                        else:
+                            print("❌ 更新失败")
+                    else:
+                        print("🔄 未进行任何修改")
+                else:
+                    print("❌ 无效的编号")
+            except ValueError:
+                print("❌ 无效的编号")
+        elif choice == "4":
+            # 删除邮件调度
+            if not service.schedules:
+                print("❌ 暂无邮件调度配置")
+                continue
+                
+            service.list_schedules()
+            try:
+                index = int(input("请输入要删除的调度编号: "))
+                if 0 <= index < len(service.schedules):
+                    schedule = service.schedules[index]
+                    confirm = input(f"确认删除调度 '{schedule.topic} -> {schedule.recipient}' 吗? (y/N): ").strip().lower()
+                    if confirm in ['y', 'yes', '是']:
+                        if service.delete_schedule(index):
+                            print("✅ 邮件调度已删除")
+                        else:
+                            print("❌ 删除失败")
+                    else:
+                        print("🚫 已取消删除")
+                else:
+                    print("❌ 无效的编号")
+            except ValueError:
+                print("❌ 无效的编号")
+        elif choice == "5":
             service.list_schedules()
             try:
                 index = int(input("请输入要切换状态的调度编号: "))
@@ -445,7 +570,7 @@ async def main():
                 print("✅ 调度状态已切换")
             except ValueError:
                 print("❌ 无效的编号")
-        elif choice == "4":
+        elif choice == "6":
             print("🚀 启动定时邮件服务...")
             print("按 Ctrl+C 停止服务")
             try:
@@ -457,7 +582,7 @@ async def main():
                 logger.error(f"服务运行时出错: {e}")
                 service.stop_service()
                 print("\n❌ 服务异常停止")
-        elif choice == "5":
+        elif choice == "7":
             if service.schedules:
                 service.list_schedules()
                 try:
