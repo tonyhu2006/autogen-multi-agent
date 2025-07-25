@@ -280,6 +280,14 @@ class AutoGenMultiAgentSystem:
         else:
             key_concepts = analysis.get("key_concepts", []) if isinstance(analysis, dict) else []
         
+        # 需要实时信息的关键词（应该使用搜索）
+        realtime_keywords = [
+            "今天", "现在", "当前", "最新", "实时", "日期", "时间", "新闻", "进展", "资讯",
+            "today", "now", "current", "latest", "real-time", "date", "time", "news", "update"
+        ]
+        if any(keyword in user_input_lower for keyword in realtime_keywords):
+            return TaskType.RESEARCH
+        
         # 研究相关关键词
         research_keywords = ["研究", "调查", "分析", "搜索", "查找", "了解", "research", "investigate", "analyze"]
         if any(keyword in user_input_lower for keyword in research_keywords):

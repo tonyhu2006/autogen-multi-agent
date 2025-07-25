@@ -159,13 +159,21 @@ class EnhancedResearchAgent(EnhancedAssistantAgent):
 
     def _is_research_request(self, query: str) -> bool:
         """判断是否为研究请求"""
+        # 需要实时信息的关键词（应该使用搜索）
+        realtime_keywords = [
+            "今天", "现在", "当前", "最新", "实时", "日期", "时间", "新闻", "进展", "资讯",
+            "today", "now", "current", "latest", "real-time", "date", "time", "news", "update"
+        ]
+        
+        # 传统研究关键词
         research_keywords = [
             "研究", "调查", "分析", "搜索", "查找", "了解",
             "research", "investigate", "analyze", "search", "find", "study"
         ]
         
         query_lower = query.lower()
-        return any(keyword in query_lower for keyword in research_keywords)
+        # 如果包含实时信息关键词或研究关键词，都应该执行搜索
+        return any(keyword in query_lower for keyword in realtime_keywords + research_keywords)
 
     async def _perform_research(self, query: str) -> Dict[str, Any]:
         """执行研究任务"""
