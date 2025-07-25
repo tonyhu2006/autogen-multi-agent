@@ -417,7 +417,12 @@ async def main():
         print("5. 测试发送邮件")
         print("0. 退出")
         
-        choice = input("\n请选择操作 (0-5): ").strip()
+        try:
+            choice = input("\n请选择操作 (0-5): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n👋 检测到退出信号，正在关闭服务...")
+            service.stop_service()
+            break
         
         if choice == "0":
             service.stop_service()

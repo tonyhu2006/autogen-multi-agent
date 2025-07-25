@@ -79,7 +79,8 @@ class CognitiveTools:
             recommendations = self._generate_recommendations(insights, level)
             
             # 计算置信度
-            confidence = self._calculate_confidence(concepts, relationships, patterns)
+            insights = []  # 为简化分析提供空洞察列表
+            confidence = self._calculate_confidence(concepts, relationships, patterns, insights)
             
             result = CognitiveAnalysisResult(
                 concepts=concepts,
