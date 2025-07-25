@@ -91,3 +91,5 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# config
+email_schedules.json
