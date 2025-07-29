@@ -16,6 +16,17 @@ import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
+# 设置UTF-8编码支持（安全版本）
+if sys.platform.startswith('win'):
+    # Windows系统UTF-8编码设置 - 仅设置控制台代码页
+    try:
+        os.system('chcp 65001 > nul')
+    except:
+        pass
+    
+    # 设置环境变量确保UTF-8支持
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -564,7 +575,34 @@ async def interactive_mode():
                 result = await system.process_user_request(user_input)
                 
                 if result["success"]:
-                    print(f"🤖 AI: {result['result']}")
+                    # 使用终端Markdown渲染器美化AI响应
+                    try:
+                        from utils.terminal_markdown import print_ai_response
+                        
+                        # 提取AI响应内容
+                        ai_response = result['result']
+                        if isinstance(ai_response, dict):
+                            # 如果是字典格式，深度提取实际响应内容
+                            if 'result' in ai_response:
+                                nested_result = ai_response['result']
+                                if isinstance(nested_result, dict) and 'result' in nested_result:
+                                    actual_response = str(nested_result['result'])
+                                else:
+                                    actual_response = str(nested_result)
+                            else:
+                                actual_response = str(ai_response)
+                        else:
+                            actual_response = str(ai_response)
+                        
+                        # 使用Markdown渲染器输出
+                        print_ai_response(actual_response, "AI助手")
+                        
+                    except Exception as render_error:
+                        # 回退到普通输出（包括ImportError和其他渲染错误）
+                        print(f"🤖 AI: {result['result']}")
+                        # 调试信息（可选）
+                        import logging
+                        logging.debug(f"Markdown渲染失败: {render_error}")
                 else:
                     print(f"❌ 错误: {result.get('message', result.get('error', '未知错误'))}")
                 

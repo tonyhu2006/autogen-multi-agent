@@ -195,7 +195,9 @@ class TeamCoordinator:
                 "max_tokens": 1000
             }
             
-            async with aiohttp.ClientSession() as session:
+            # 设置30秒超时保护
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(api_url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
