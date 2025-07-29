@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-基础代理类 - AutoGen v0.4+ API版本
-=====================================
-
-基于AutoGen v0.4+的现代化多代理实现，
-集成认知工具和协议Shell的增强型代理基类。
+增强型代理基类 v0.4
+支持 AutoGen v0.4+ API
+集成认知增强、协议Shell和Context Engineering
 """
 
 import os
+import time
 import asyncio
 import logging
-from typing import Dict, List, Any, Optional, Callable, Union
-from abc import ABC, abstractmethod
-import json
-import time
+from typing import List, Dict, Any, Optional, Union
+from enum import Enum
+from dataclasses import dataclass
+from datetime import datetime
+
+# 注意：由于AutoGen框架与Gemini Balance API存在深层兼容性问题，
+# 本系统已完全绕过AutoGen标准流程，直接使用稳定的Gemini API调用
 
 # AutoGen v0.4+ imports
 from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.base import TaskRunner
 from autogen_agentchat.messages import ChatMessage, TextMessage
 from autogen_agentchat.teams import RoundRobinGroupChat, SelectorGroupChat
 from autogen_agentchat.conditions import TextMentionTermination, MaxMessageTermination
@@ -385,15 +386,21 @@ class EnhancedAssistantAgent(AssistantAgent):
             else:
                 processed_messages = messages
             
-            # 模型推理 - 使用直接调用方式绕过 AutoGen 框架兼容性问题
-            # 这样可以确保稳定的 API 调用和响应处理
+            # 模型推理 - 直接使用稳定的Gemini API调用，绕过AutoGen兼容性问题
+            # 由于AutoGen框架与Gemini Balance API存在深层兼容性问题，
+            # 直接使用经过验证的直接API调用方式确保稳定性
             try:
-                # 尝试使用 AutoGen 标准流程
-                response = await super().on_messages(processed_messages, cancellation_token)
-            except Exception as autogen_error:
-                logger.warning(f"AutoGen 标准流程失败，使用直接调用: {autogen_error}")
-                # 使用直接 Gemini 调用作为备用方案
+                # 直接使用经过验证的Gemini API调用
                 response = await self._direct_gemini_call(processed_messages)
+                logger.info("✅ 使用稳定的直接Gemini API调用")
+                
+            except Exception as direct_error:
+                logger.error(f"直接Gemini API调用失败: {direct_error}")
+                # 返回错误消息
+                response = TextMessage(
+                    content=f"抱歉，处理您的请求时出现错误: {str(direct_error)}",
+                    source=self.name
+                )
             
             # 记录对话历史
             self.conversation_history.extend(messages)
@@ -408,6 +415,45 @@ class EnhancedAssistantAgent(AssistantAgent):
                 content=f"抱歉，处理消息时遇到错误: {str(e)}",
                 source=self.name
             )
+    
+    def _validate_messages_for_autogen(self, messages: List[ChatMessage]) -> List[ChatMessage]:
+        """
+        验证并修复消息格式，确保符合AutoGen框架期望
+        解决"No model result was produced"警告的根本原因
+        """
+        validated_messages = []
+        
+        for msg in messages:
+            try:
+                # 确保消息有正确的content属性
+                if hasattr(msg, 'content'):
+                    content = msg.content
+                else:
+                    content = str(msg)
+                
+                # 确保content不为空且为字符串
+                if not content or not isinstance(content, str):
+                    content = str(content) if content else "空消息"
+                
+                # 创建符合AutoGen期望的TextMessage
+                validated_msg = TextMessage(
+                    content=content,
+                    source=getattr(msg, 'source', 'user')
+                )
+                
+                validated_messages.append(validated_msg)
+                
+            except Exception as e:
+                logger.warning(f"消息验证失败，使用默认格式: {e}")
+                # 创建默认消息
+                default_msg = TextMessage(
+                    content=str(msg),
+                    source='user'
+                )
+                validated_messages.append(default_msg)
+        
+        logger.info(f"消息验证完成，处理了{len(validated_messages)}条消息")
+        return validated_messages
     
     async def _direct_gemini_call(self, messages: List[ChatMessage]) -> ChatMessage:
         """直接调用 Gemini API，使用 OpenAI 兼容格式和缓存的环境变量"""
